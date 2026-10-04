@@ -3,11 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'config.dart';
 import 'feed.dart';
 import 'notice_prefs.dart';
-import 'push.dart';
 import 'road.dart';
 
 const _ink = Color(0xFF0B1220);
@@ -19,7 +20,8 @@ const _live = Color(0xFF3DDC97);
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  startDriverPush();
+  OneSignal.initialize("564f6ed3-9f7a-4513-8173-706c635905ae");
+  OneSignal.Notifications.requestPermission(true);
   runApp(const DriverApp());
 }
 
@@ -69,6 +71,7 @@ class _DriverHomeState extends State<DriverHome> {
   List<Advisory> _advisories = const [];
   String? _advisoryError;
   NoticePrefs _prefs = const NoticePrefs(alertsEnabled: true, enabledLevels: {'Low', 'Moderate', 'High'});
+  Set<String> _seenIds = {};
   int _tab = 0;
   Timer? _mapTimer;
   Timer? _advisoryTimer;
@@ -77,6 +80,8 @@ class _DriverHomeState extends State<DriverHome> {
   void initState() {
     super.initState();
     _loadPrefs();
+    _loadSeen();
+    _listenForPushes();
     _loadMap();
     _loadAdvisories();
     _mapTimer = Timer.periodic(AppConfig.mapPoll, (_) => _loadMap());
@@ -95,6 +100,47 @@ class _DriverHomeState extends State<DriverHome> {
     final prefs = await NoticePrefs.load();
     if (!mounted) return;
     setState(() => _prefs = prefs);
+  }
+
+  Future<void> _loadSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() => _seenIds = (prefs.getStringList('seenAdvisoryIds') ?? []).toSet());
+  }
+
+  void _listenForPushes() {
+    if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) return;
+    try {
+      OneSignal.Notifications.addForegroundWillDisplayListener((event) {
+        _applyPush(event.notification);
+      });
+      OneSignal.Notifications.addClickListener((event) {
+        _applyPush(event.notification);
+        _openAdvisories();
+      });
+    } catch (_) {
+      // The widget test has no OneSignal native plugin.
+    }
+  }
+
+  void _applyPush(OSNotification notification) {
+    final raw = notification.additionalData;
+    if (raw != null && mounted) {
+      final item = Advisory.fromJson(raw);
+      if (item.id.isNotEmpty && !_advisories.any((entry) => entry.id == item.id)) {
+        setState(() {
+          _advisories = [item, ..._advisories];
+          _advisoryError = null;
+        });
+      }
+    }
+    _loadAdvisories();
+  }
+
+  void _openAdvisories() {
+    if (!mounted) return;
+    setState(() => _tab = 1);
+    _markSeen();
   }
 
   Future<void> _savePrefs(NoticePrefs next) async {
@@ -116,13 +162,25 @@ class _DriverHomeState extends State<DriverHome> {
         _advisories = list;
         _advisoryError = null;
       });
+      if (_tab == 1) _markSeen();
     } catch (error) {
       if (!mounted) return;
       setState(() => _advisoryError = 'Advisories are unavailable right now.');
     }
   }
 
-  int get _alertCount => _advisories.where((item) => _prefs.allows(item.level)).length;
+  int get _alertCount => _advisories.where((item) => _prefs.allows(item.level) && !_seenIds.contains(item.id)).length;
+
+  Future<void> _markSeen() async {
+    final next = {..._seenIds, ..._advisories.map((item) => item.id).where((id) => id.isNotEmpty)};
+    if (next.length == _seenIds.length) return;
+    _seenIds = next;
+    final prefs = await SharedPreferences.getInstance();
+    final stored = next.toList();
+    if (stored.length > 40) stored.removeRange(0, stored.length - 40);
+    await prefs.setStringList('seenAdvisoryIds', stored);
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +193,10 @@ class _DriverHomeState extends State<DriverHome> {
       body: SafeArea(child: pages[_tab]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
-        onDestinationSelected: (index) => setState(() => _tab = index),
+        onDestinationSelected: (index) {
+          setState(() => _tab = index);
+          if (index == 1) _markSeen();
+        },
         destinations: [
           const NavigationDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: 'Map'),
           NavigationDestination(
@@ -419,7 +480,7 @@ class _DriverHomeState extends State<DriverHome> {
               const SizedBox(height: 4),
               Text(item.message, style: const TextStyle(color: _muted)),
               const SizedBox(height: 6),
-              Text(item.sentAtIso, style: const TextStyle(color: _muted, fontSize: 12)),
+              Text(_formatAdvisoryTime(item.sentAtIso), style: const TextStyle(color: _muted, fontSize: 12)),
             ],
           ),
         );
@@ -501,6 +562,16 @@ class _DriverHomeState extends State<DriverHome> {
       ),
       child: Text(text, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
     );
+  }
+
+  String _formatAdvisoryTime(String iso) {
+    final parsed = DateTime.tryParse(iso);
+    if (parsed == null) return iso;
+    final local = parsed.toLocal();
+    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final suffix = local.hour >= 12 ? 'PM' : 'AM';
+    return '${local.month}/${local.day}/${local.year}, $hour:$minute $suffix';
   }
 
   String _levelNote(TrafficFeed feed) {

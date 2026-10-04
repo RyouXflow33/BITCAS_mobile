@@ -37,7 +37,7 @@ dependencies:
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
   http: ^1.6.0
-  onesignal_flutter: ^5.7.0
+  onesignal_flutter: ^5.2.5
   shared_preferences: ^2.5.5
 
 dev_dependencies:

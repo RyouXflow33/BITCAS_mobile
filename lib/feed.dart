@@ -169,8 +169,9 @@ class BitcasApi {
   }
 
   Future<List<Advisory>> fetchAdvisories() async {
-    final uri = Uri.parse('${AppConfig.baseUrl}/assets/data/advisories.json');
-    final response = await http.get(uri).timeout(const Duration(seconds: 8));
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final uri = Uri.parse('${AppConfig.baseUrl}/assets/data/advisories.json?t=$stamp');
+    final response = await http.get(uri, headers: const {'Cache-Control': 'no-cache'}).timeout(const Duration(seconds: 8));
     if (response.statusCode != 200) {
       throw Exception('Advisories unavailable (${response.statusCode})');
     }
