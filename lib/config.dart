@@ -1,8 +1,9 @@
 class AppConfig {
-  /// Android emulator reaches this PC as 10.0.2.2.
-  /// A phone on the same Wi-Fi needs the PC's address, for example
-  /// http://192.168.1.20/BITCAS_UI_Skeleton
-  static const baseUrl = 'http://192.168.1.9/BITCAS_UI_Skeleton';
+  /// Primary public Hostinger deployment.
+  static const baseUrl = 'https://rosybrown-hamster-349004.hostingersite.com';
+
+  /// Local XAMPP fallback when testing on the same Wi-Fi before or alongside Hostinger.
+  static const localBaseUrl = 'http://192.168.1.5/BITCAS_UI_Skeleton';
 
   /// Public OneSignal App ID. The REST API key stays on the PHP side.
   static const oneSignalAppId = '564f6ed3-9f7a-4513-8173-706c635905ae';

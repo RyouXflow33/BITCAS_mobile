@@ -153,30 +153,63 @@ class TrafficFeed {
 }
 
 class BitcasApi {
+  static const _bases = <String>[
+    AppConfig.baseUrl,
+    AppConfig.localBaseUrl,
+  ];
+
   Future<TrafficFeed> fetchTraffic() async {
-    final uri = Uri.parse('${AppConfig.baseUrl}/assets/data/congestion.json');
-    try {
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
-      if (response.statusCode != 200) {
-        return TrafficFeed.failed('Camera feed unavailable (${response.statusCode})');
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    int? lastStatus;
+
+    for (final base in _bases) {
+      final uri = Uri.parse('$base/api/get_live.php?t=$stamp');
+      try {
+        final response = await http
+            .get(uri, headers: const {'Cache-Control': 'no-cache'})
+            .timeout(const Duration(seconds: 6));
+        lastStatus = response.statusCode;
+        if (response.statusCode != 200) continue;
+        final decoded = jsonDecode(response.body);
+        if (decoded is! Map) continue;
+        return TrafficFeed.fromJson(Map<String, dynamic>.from(decoded));
+      } catch (_) {
+        continue;
       }
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map) return TrafficFeed.failed('Camera feed was not a JSON object');
-      return TrafficFeed.fromJson(Map<String, dynamic>.from(decoded));
-    } catch (error) {
-      return TrafficFeed.failed('Cannot reach the dashboard. Check the PC address in lib/config.dart.');
     }
+
+    if (lastStatus != null) {
+      return TrafficFeed.failed('Camera feed unavailable ($lastStatus)');
+    }
+    return TrafficFeed.failed('Cannot reach the BITCAS server.');
   }
 
   Future<List<Advisory>> fetchAdvisories() async {
     final stamp = DateTime.now().millisecondsSinceEpoch;
-    final uri = Uri.parse('${AppConfig.baseUrl}/assets/data/advisories.json?t=$stamp');
-    final response = await http.get(uri, headers: const {'Cache-Control': 'no-cache'}).timeout(const Duration(seconds: 8));
-    if (response.statusCode != 200) {
-      throw Exception('Advisories unavailable (${response.statusCode})');
+    Object? lastError;
+
+    for (final base in _bases) {
+      final uri = Uri.parse('$base/api/advisories.php?t=$stamp');
+      try {
+        final response = await http
+            .get(uri, headers: const {'Cache-Control': 'no-cache'})
+            .timeout(const Duration(seconds: 6));
+        if (response.statusCode != 200) {
+          lastError = Exception('Advisories unavailable (${response.statusCode})');
+          continue;
+        }
+        final decoded = jsonDecode(response.body);
+        if (decoded is! List) return const [];
+        return decoded
+            .whereType<Map>()
+            .map((item) => Advisory.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
+      } catch (error) {
+        lastError = error;
+        continue;
+      }
     }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! List) return const [];
-    return decoded.whereType<Map>().map((item) => Advisory.fromJson(Map<String, dynamic>.from(item))).toList();
+
+    throw lastError ?? Exception('Advisories unavailable');
   }
 }
