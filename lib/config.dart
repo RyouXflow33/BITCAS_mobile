@@ -1,6 +1,6 @@
 class AppConfig {
   /// Primary public Hostinger deployment.
-  static const baseUrl = 'https://rosybrown-hamster-349004.hostingersite.com';
+  static const baseUrl = 'https://bacolodlife.org';
 
   /// Local XAMPP fallback when testing on the same Wi-Fi before or alongside Hostinger.
   static const localBaseUrl = 'http://192.168.1.5/BITCAS_UI_Skeleton';
