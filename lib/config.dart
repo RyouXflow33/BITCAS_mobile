@@ -13,4 +13,11 @@ class AppConfig {
   static const staleAfter = Duration(seconds: 30);
   static const mapPoll = Duration(seconds: 3);
   static const advisoryPoll = Duration(seconds: 5);
+
+  /// The classmate UI can show sample advisories. This app always uses the live desk feed.
+  static const useDemoAdvisories = false;
+
+  /// Only used if the version cannot be read from the platform.
+  static const fallbackVersion = '1.0.0';
+  static const fallbackBuild = '1';
 }

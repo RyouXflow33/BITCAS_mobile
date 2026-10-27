@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'config.dart';
+import 'road.dart';
 
 class Advisory {
   const Advisory({
@@ -12,6 +13,8 @@ class Advisory {
     required this.message,
     required this.sentAtIso,
     required this.channel,
+    this.street,
+    this.road,
   });
 
   final String id;
@@ -21,7 +24,28 @@ class Advisory {
   final String sentAtIso;
   final String channel;
 
+  /// Street the camera was watching. Falls back to [area].
+  final String? street;
+
+  /// Road the street sits on. Falls back to the Villamonte camera road.
+  final String? road;
+
+  String get streetLabel => (street != null && street!.trim().isNotEmpty) ? street!.trim() : area;
+
+  String get roadLabel {
+    final named = road?.trim() ?? '';
+    if (named.isNotEmpty) return named;
+    final place = area.toLowerCase();
+    if (place.contains('road') || place.contains('highway') || place.contains('avenue')) return area;
+    return villamonteRoadName;
+  }
+
   factory Advisory.fromJson(Map<String, dynamic> json) {
+    String? text(Object? value) {
+      final raw = value?.toString().trim() ?? '';
+      return raw.isEmpty ? null : raw;
+    }
+
     return Advisory(
       id: '${json['id'] ?? ''}',
       level: '${json['level'] ?? ''}',
@@ -29,6 +53,8 @@ class Advisory {
       message: '${json['message'] ?? ''}',
       sentAtIso: '${json['sentAtIso'] ?? ''}',
       channel: '${json['channel'] ?? ''}',
+      street: text(json['street']),
+      road: text(json['road']),
     );
   }
 }

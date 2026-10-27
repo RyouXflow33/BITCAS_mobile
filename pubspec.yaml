@@ -39,6 +39,7 @@ dependencies:
   http: ^1.6.0
   onesignal_flutter: ^5.2.5
   shared_preferences: ^2.5.5
+  package_info_plus: ^8.3.0
 
 dev_dependencies:
   flutter_test:
